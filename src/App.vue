@@ -30,19 +30,6 @@
           }"
           styleClass="vgt-table striped bordered"
         >
-          <template #table-row="props">
-            <span v-if="props.column.field === 'action'">
-              <button @click="editRow(props.row)" class="btn btn-sm btn-primary">
-                Edit
-              </button>
-              <button @click="deleteRow(props.row)" class="btn btn-sm btn-danger">
-                Delete
-              </button>
-            </span>
-            <span v-else>
-              {{ props.formattedRow[props.column.field] }}
-            </span>
-          </template>
         </vue-good-table>
       </div>
 
@@ -102,12 +89,6 @@ export default {
           field: 'status',
           type: 'string',
           width: '100px'
-        },
-        {
-          label: 'Actions',
-          field: 'action',
-          sortable: false,
-          width: '150px'
         }
       ],
       rows: [
@@ -167,14 +148,6 @@ export default {
           type: typeof sampleRow[key] === 'number' ? 'number' : 'string'
         }))
         
-        // Add actions column
-        newColumns.push({
-          label: 'Actions',
-          field: 'action',
-          sortable: false,
-          width: '150px'
-        })
-        
         this.columns = newColumns
       }
     },
@@ -182,19 +155,6 @@ export default {
     clearData() {
       this.rows = []
       this.jsonInput = ''
-    },
-    
-    editRow(row) {
-      console.log('Edit row:', row)
-      // Implement edit functionality
-      alert(`Edit functionality for ${row.name || 'item'} - implement as needed`)
-    },
-    
-    deleteRow(row) {
-      const index = this.rows.findIndex(r => r === row)
-      if (index > -1) {
-        this.rows.splice(index, 1)
-      }
     }
   }
 }
