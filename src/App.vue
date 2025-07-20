@@ -22,7 +22,7 @@
           }"
           :search-options="{
             enabled: true,
-            trigger: 'enter'
+            trigger: 'keyup'
           }"
           :sort-options="{
             enabled: true,
