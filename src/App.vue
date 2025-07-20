@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <header class="app-header">
-      <h1>JSON Table Vue App</h1>
+      <h1>Json Browser</h1>
       <p>A Vue.js application with vue-good-table for displaying JSON data</p>
     </header>
 

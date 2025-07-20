@@ -1,4 +1,4 @@
-# JSON Table Vue App
+# Json Browser
 
 A Vue.js application that uses vue-good-table to display and manipulate JSON data in a beautiful, feature-rich table format.
 
