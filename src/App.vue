@@ -17,8 +17,8 @@
             enabled: true,
             mode: 'records',
             perPage: 10,
-            perPageDropdown: [10, 20, 50],
-            dropdownAllowAll: false,
+            perPageDropdown: [10, 20, 50, 100],
+            dropdownAllowAll: true,
           }"
           :search-options="{
             enabled: true,
