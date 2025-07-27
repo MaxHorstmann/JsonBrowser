@@ -38,13 +38,23 @@
         <h3>Add JSON Data</h3>
         <textarea
           v-model="jsonInput"
-          placeholder="Enter JSON array here..."
+          placeholder="Enter JSON array or URL to JSON endpoint..."
           rows="6"
           class="json-textarea"
         ></textarea>
+        <div class="auth-section">
+          <label for="bearerToken" class="token-label">Bearer Token (optional):</label>
+          <input
+            id="bearerToken"
+            v-model="bearerToken"
+            type="password"
+            placeholder="Enter bearer token for authenticated requests..."
+            class="token-input"
+          />
+        </div>
         <div class="button-group">
-          <button @click="loadJsonData" class="btn btn-primary">
-            Load JSON Data
+          <button @click="loadJsonData" class="btn btn-primary" :disabled="isLoading">
+            {{ isLoading ? 'Loading...' : 'Load JSON Data' }}
           </button>
           <button @click="clearData" class="btn btn-secondary">
             Clear Data
@@ -61,6 +71,8 @@ export default {
   data() {
     return {
       jsonInput: '',
+      bearerToken: '',
+      isLoading: false,
       columns: [
         {
           label: 'ID',
@@ -124,18 +136,85 @@ export default {
     }
   },
   methods: {
-    loadJsonData() {
+    isValidUrl(string) {
       try {
-        const data = JSON.parse(this.jsonInput)
-        if (Array.isArray(data)) {
-          this.rows = data
-          this.updateColumns(data)
-          this.jsonInput = ''
+        const url = new URL(string.trim());
+        return url.protocol === 'http:' || url.protocol === 'https:';
+      } catch (_) {
+        return false;
+      }
+    },
+
+    async loadJsonData() {
+      if (!this.jsonInput.trim()) {
+        alert('Please enter JSON data or a URL');
+        return;
+      }
+
+      const input = this.jsonInput.trim();
+      this.isLoading = true;
+
+      try {
+        let data;
+        
+        if (this.isValidUrl(input)) {
+          // Fetch data from URL
+          console.log('Fetching data from URL:', input);
+          
+          const headers = {
+            'Content-Type': 'application/json'
+          };
+          
+          // Add Authorization header if bearer token is provided
+          if (this.bearerToken.trim()) {
+            headers['Authorization'] = `Bearer ${this.bearerToken.trim()}`;
+          }
+          
+          const response = await fetch(input, {
+            method: 'GET',
+            headers: headers
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            console.warn('Response may not be JSON, attempting to parse anyway');
+          }
+          
+          data = await response.json();
         } else {
-          alert('Please enter a valid JSON array')
+          // Parse as JSON string
+          data = JSON.parse(input);
+        }
+        
+        // Handle wrapped response: if it's an object with a single "value" key containing an array
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          const keys = Object.keys(data);
+          if (keys.length === 1 && keys[0] === 'value' && Array.isArray(data.value)) {
+            console.log('Found wrapped response with "value" key, extracting array');
+            data = data.value;
+          }
+        }
+        
+        if (Array.isArray(data)) {
+          this.rows = data;
+          this.updateColumns(data);
+          this.jsonInput = '';
+        } else {
+          alert('The data must be a JSON array. Please ensure the URL returns a JSON array or enter a valid JSON array.');
         }
       } catch (error) {
-        alert('Invalid JSON format: ' + error.message)
+        console.error('Error loading data:', error);
+        if (this.isValidUrl(input)) {
+          alert(`Error fetching data from URL: ${error.message}`);
+        } else {
+          alert(`Invalid JSON format: ${error.message}`);
+        }
+      } finally {
+        this.isLoading = false;
       }
     },
     
@@ -155,6 +234,7 @@ export default {
     clearData() {
       this.rows = []
       this.jsonInput = ''
+      this.bearerToken = ''
     }
   }
 }
@@ -250,6 +330,34 @@ body {
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
 }
 
+/* Authentication Section */
+.auth-section {
+  margin-bottom: 15px;
+}
+
+.token-label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.token-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.token-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
 /* Button Styles */
 .button-group {
   display: flex;
@@ -272,6 +380,11 @@ body {
 
 .btn-primary:hover {
   background-color: #2980b9;
+}
+
+.btn-primary:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
 }
 
 .btn-secondary {
