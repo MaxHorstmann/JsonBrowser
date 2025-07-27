@@ -1,13 +1,82 @@
 <template>
   <div id="app">
     <header class="app-header">
-      <h1>Json Browser</h1>
-      <p>A Vue.js application with vue-good-table for displaying JSON data</p>
+      <h1>Mini Azure Resource Browser</h1>
     </header>
 
     <main class="main-content">
-      <div class="table-container">
-        <h2>Sample Data Table</h2>
+      <!-- JSON Input Section -->
+      <div class="json-input-section">
+        <h3>Azure API Configuration</h3>
+        <div class="config-row">
+          <div class="auth-section">
+            <label for="subscriptionId" class="token-label">Subscription:</label>
+            <select
+              id="subscriptionId"
+              v-model="subscriptionId"
+              class="token-input"
+              autocomplete="off"
+              data-lpignore="true"
+              data-form-type="other"
+            >
+              <option value="">Select a subscription...</option>
+              <option 
+                v-for="subscription in subscriptions" 
+                :key="subscription.id" 
+                :value="subscription.id"
+              >
+                {{ subscription.name }} ({{ subscription.id }})
+              </option>
+            </select>
+          </div>
+          <div class="auth-section">
+            <div class="endpoint-info">
+              <span class="token-label">Resource Manager Endpoint:</span>
+              <span class="endpoint-text">{{ azureEndpoint }}</span>
+            </div>
+            <div class="token-status">
+              <span class="token-label">Authentication Status:</span>
+              <span v-if="bearerToken" class="status-indicator status-success">
+                ✓ Bearer token loaded securely
+              </span>
+              <span v-else class="status-indicator status-warning">
+                ⚠ No bearer token - requests will be unauthenticated
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="data-input-section">
+          <label for="apiPathSelect" class="token-label">Azure API Endpoints:</label>
+          <select
+            id="apiPathSelect"
+            v-model="selectedApiPath"
+            @change="onApiPathSelect"
+            class="token-input"
+            :disabled="isLoading"
+          >
+            <option value="/subscriptions/{subscription-id}/resourceGroups">/subscriptions/{subscription-id}/resourceGroups - List Resource Groups</option>
+            <option value="/subscriptions/{subscription-id}/resources">/subscriptions/{subscription-id}/resources - List All Resources</option>
+            <option value="/subscriptions/{subscription-id}/providers/Microsoft.Web/sites">/subscriptions/{subscription-id}/providers/Microsoft.Web/sites - List Web Apps</option>
+            <option value="/subscriptions/{subscription-id}/providers/Microsoft.Storage/storageAccounts">/subscriptions/{subscription-id}/providers/Microsoft.Storage/storageAccounts - List Storage Accounts</option>
+            <option value="/subscriptions/{subscription-id}/providers/Microsoft.Compute/virtualMachines">/subscriptions/{subscription-id}/providers/Microsoft.Compute/virtualMachines - List Virtual Machines</option>
+            <option value="/subscriptions/{subscription-id}/providers/Microsoft.KeyVault/vaults">/subscriptions/{subscription-id}/providers/Microsoft.KeyVault/vaults - List Key Vaults</option>
+            <option value="/subscriptions/{subscription-id}/providers/Microsoft.Sql/servers">/subscriptions/{subscription-id}/providers/Microsoft.Sql/servers - List SQL Servers</option>
+          </select>
+        </div>
+        
+        <!-- Error Display Section -->
+        <div v-if="errorResponse" class="error-section">
+          <h4 class="error-title">{{ getResponseTitle() }}</h4>
+          <textarea 
+            v-model="errorResponse" 
+            class="error-console" 
+            readonly
+            rows="10"
+          ></textarea>
+        </div>
+      </div>
+
+      <div v-if="rows.length > 0" class="table-container">
         
         <!-- Vue Good Table Component -->
         <vue-good-table
@@ -22,7 +91,8 @@
           }"
           :search-options="{
             enabled: true,
-            trigger: 'keyup'
+            trigger: 'keyup',
+            searchFn: multiWordSearch
           }"
           :sort-options="{
             enabled: true,
@@ -31,35 +101,6 @@
           styleClass="vgt-table striped bordered"
         >
         </vue-good-table>
-      </div>
-
-      <!-- JSON Input Section -->
-      <div class="json-input-section">
-        <h3>Add JSON Data</h3>
-        <textarea
-          v-model="jsonInput"
-          placeholder="Enter JSON array or URL to JSON endpoint..."
-          rows="6"
-          class="json-textarea"
-        ></textarea>
-        <div class="auth-section">
-          <label for="bearerToken" class="token-label">Bearer Token (optional):</label>
-          <input
-            id="bearerToken"
-            v-model="bearerToken"
-            type="password"
-            placeholder="Enter bearer token for authenticated requests..."
-            class="token-input"
-          />
-        </div>
-        <div class="button-group">
-          <button @click="loadJsonData" class="btn btn-primary" :disabled="isLoading">
-            {{ isLoading ? 'Loading...' : 'Load JSON Data' }}
-          </button>
-          <button @click="clearData" class="btn btn-secondary">
-            Clear Data
-          </button>
-        </div>
       </div>
     </main>
   </div>
@@ -70,72 +111,123 @@ export default {
   name: 'App',
   data() {
     return {
-      jsonInput: '',
+      selectedApiPath: '/subscriptions/{subscription-id}/resourceGroups',
+      azureEndpoint: 'https://management.azure.com',
+      subscriptionId: '',
+      subscriptions: [],
       bearerToken: '',
       isLoading: false,
-      columns: [
-        {
-          label: 'ID',
-          field: 'id',
-          type: 'number',
-          width: '80px'
-        },
-        {
-          label: 'Name',
-          field: 'name',
-          type: 'string'
-        },
-        {
-          label: 'Email',
-          field: 'email',
-          type: 'string'
-        },
-        {
-          label: 'Age',
-          field: 'age',
-          type: 'number',
-          width: '80px'
-        },
-        {
-          label: 'Status',
-          field: 'status',
-          type: 'string',
-          width: '100px'
-        }
-      ],
-      rows: [
-        {
-          id: 1,
-          name: 'John Doe',
-          email: 'john@example.com',
-          age: 30,
-          status: 'Active'
-        },
-        {
-          id: 2,
-          name: 'Jane Smith',
-          email: 'jane@example.com',
-          age: 25,
-          status: 'Active'
-        },
-        {
-          id: 3,
-          name: 'Bob Johnson',
-          email: 'bob@example.com',
-          age: 35,
-          status: 'Inactive'
-        },
-        {
-          id: 4,
-          name: 'Alice Brown',
-          email: 'alice@example.com',
-          age: 28,
-          status: 'Active'
-        }
-      ]
+      errorResponse: '',
+      columns: [],
+      rows: []
+    }
+  },
+  async mounted() {
+    console.log('App mounted - Loading Azure configuration...');
+    try {
+      await this.loadAzureConfig();
+      
+      // Load bearer token from environment variable if available
+      const envToken = import.meta.env.VITE_AZURE_TOKEN;
+      if (envToken) {
+        this.bearerToken = envToken;
+        console.log('✓ Loaded bearer token from environment variable');
+      }
+      
+      console.log('✓ Azure configuration loading completed');
+      
+      // Automatically load data for the default selected API path
+      if (this.selectedApiPath && this.subscriptionId) {
+        console.log('Auto-loading data for default API path...');
+        await this.loadJsonData(this.selectedApiPath);
+      }
+    } catch (error) {
+      console.error('Error during Azure config loading:', error);
     }
   },
   methods: {
+    async loadAzureConfig() {
+      try {
+        console.log('Attempting to load azure-config.json...');
+        
+        // Add a timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, 5000); // 5 second timeout
+        
+        const response = await fetch('./azure-config.json', {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const config = await response.json();
+          console.log('✓ Azure config file loaded successfully');
+          
+          if (config.endpoint) {
+            this.azureEndpoint = config.endpoint;
+            console.log('✓ Loaded Resource Manager endpoint:', config.endpoint);
+          }
+          
+          if (config.subscriptions && Array.isArray(config.subscriptions)) {
+            this.subscriptions = config.subscriptions;
+            console.log('✓ Loaded', config.subscriptions.length, 'subscriptions');
+            console.log('First few subscriptions:', config.subscriptions.slice(0, 3));
+            
+            // Set default subscription if available
+            if (config.defaultSubscriptionId) {
+              this.subscriptionId = config.defaultSubscriptionId;
+              const defaultSub = config.subscriptions.find(sub => sub.id === config.defaultSubscriptionId);
+              if (defaultSub) {
+                console.log('✓ Set default subscription:', defaultSub.name);
+                
+                // Auto-load data if we have both subscription and API path
+                if (this.selectedApiPath) {
+                  console.log('Auto-loading data with default subscription...');
+                  setTimeout(() => {
+                    this.loadJsonData(this.selectedApiPath);
+                  }, 100); // Small delay to ensure UI is ready
+                }
+              }
+            }
+          } else {
+            console.warn('No subscriptions found in config or invalid format:', config.subscriptions);
+          }
+          
+          if (config.timestamp) {
+            console.log('Configuration loaded from:', config.timestamp);
+          }
+        } else {
+          console.warn(`Could not load azure-config.json (HTTP ${response.status}) - run load-azure-config.js first`);
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          console.warn('Azure configuration loading timed out after 5 seconds');
+        } else {
+          console.warn('Could not load Azure configuration:', error.message);
+        }
+      }
+    },
+
+    async loadResourceManagerEndpoint() {
+      // This method is now simplified - just reload the config
+      await this.loadAzureConfig();
+    },
+
+    async loadBearerToken() {
+      // This method is now simplified - just reload the config
+      await this.loadAzureConfig();
+    },
+
+    async onApiPathSelect() {
+      if (this.selectedApiPath) {
+        // Automatically load data when a path is selected
+        await this.loadJsonData(this.selectedApiPath);
+      }
+    },
+
     isValidUrl(string) {
       try {
         const url = new URL(string.trim());
@@ -145,21 +237,43 @@ export default {
       }
     },
 
-    async loadJsonData() {
-      if (!this.jsonInput.trim()) {
-        alert('Please enter JSON data or a URL');
+    async loadJsonData(apiPath = null) {
+      const inputPath = apiPath || this.selectedApiPath;
+      
+      if (!inputPath || !inputPath.trim()) {
+        alert('Please select an API endpoint from the dropdown');
         return;
       }
 
-      const input = this.jsonInput.trim();
+      const input = inputPath.trim();
       this.isLoading = true;
+      this.errorResponse = ''; // Clear any previous errors
 
       try {
         let data;
+        let fetchUrl = input;
+        let contentType = ''; // Declare contentType in broader scope
         
-        if (this.isValidUrl(input)) {
+        // If input starts with '/', treat it as an Azure API path and prepend the Azure endpoint
+        if (input.startsWith('/')) {
+          fetchUrl = this.azureEndpoint.replace(/\/$/, '') + input;
+          
+          // Replace {subscription-id} placeholder with actual subscription ID if provided
+          if (this.subscriptionId.trim() && fetchUrl.includes('{subscription-id}')) {
+            fetchUrl = fetchUrl.replace(/\{subscription-id\}/g, this.subscriptionId.trim());
+          }
+          
+          // Add api-version query parameter (required for all Azure API requests)
+          const apiVersion = '2021-04-01'; // Standard API version for most resource management operations
+          const separator = fetchUrl.includes('?') ? '&' : '?';
+          fetchUrl += `${separator}api-version=${apiVersion}`;
+          
+          console.log('Building Azure API URL:', fetchUrl);
+        }
+        
+        if (this.isValidUrl(fetchUrl)) {
           // Fetch data from URL
-          console.log('Fetching data from URL:', input);
+          console.log('Fetching data from URL:', fetchUrl);
           
           const headers = {
             'Content-Type': 'application/json'
@@ -170,30 +284,49 @@ export default {
             headers['Authorization'] = `Bearer ${this.bearerToken.trim()}`;
           }
           
-          const response = await fetch(input, {
+          const response = await fetch(fetchUrl, {
             method: 'GET',
             headers: headers
           });
           
+          const responseText = await response.text();
+          
           if (!response.ok) {
+            // Display the error response in the console-style text area
+            let errorDisplay = `HTTP ${response.status} ${response.statusText}\n`;
+            errorDisplay += `URL: ${fetchUrl}\n`;
+            errorDisplay += `Headers: ${JSON.stringify(Object.fromEntries(response.headers), null, 2)}\n\n`;
+            errorDisplay += `Response Body:\n${responseText}`;
+            
+            this.errorResponse = errorDisplay;
             throw new Error(`HTTP error! status: ${response.status}`);
           }
           
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
+          contentType = response.headers.get('content-type') || 'unknown';
+          if (!contentType.includes('application/json')) {
             console.warn('Response may not be JSON, attempting to parse anyway');
           }
           
-          data = await response.json();
+          try {
+            data = JSON.parse(responseText);
+          } catch (parseError) {
+            // If JSON parsing fails, show the raw response
+            let errorDisplay = `JSON Parse Error\n`;
+            errorDisplay += `URL: ${fetchUrl}\n`;
+            errorDisplay += `Content-Type: ${contentType}\n\n`;
+            errorDisplay += `Raw Response:\n${responseText}`;
+            
+            this.errorResponse = errorDisplay;
+            throw new Error(`Failed to parse JSON response: ${parseError.message}`);
+          }
         } else {
-          // Parse as JSON string
-          data = JSON.parse(input);
+          alert('Please select a valid API endpoint from the dropdown');
+          return;
         }
         
-        // Handle wrapped response: if it's an object with a single "value" key containing an array
+        // Handle wrapped response: if it's an object with a "value" key containing an array
         if (data && typeof data === 'object' && !Array.isArray(data)) {
-          const keys = Object.keys(data);
-          if (keys.length === 1 && keys[0] === 'value' && Array.isArray(data.value)) {
+          if (data.hasOwnProperty('value') && Array.isArray(data.value)) {
             console.log('Found wrapped response with "value" key, extracting array');
             data = data.value;
           }
@@ -202,17 +335,27 @@ export default {
         if (Array.isArray(data)) {
           this.rows = data;
           this.updateColumns(data);
-          this.jsonInput = '';
+          // Clear error response on successful load
+          this.errorResponse = '';
+          // Don't clear the selection - keep it so user can see what was loaded
         } else {
-          alert('The data must be a JSON array. Please ensure the URL returns a JSON array or enter a valid JSON array.');
+          // Show the non-array response in the console-style display
+          let responseDisplay = `Non-Array Response\n`;
+          responseDisplay += `URL: ${fetchUrl}\n`;
+          responseDisplay += `Content-Type: ${contentType || 'unknown'}\n\n`;
+          responseDisplay += `Response Body:\n${JSON.stringify(data, null, 2)}`;
+          
+          this.errorResponse = responseDisplay;
         }
       } catch (error) {
         console.error('Error loading data:', error);
-        if (this.isValidUrl(input)) {
-          alert(`Error fetching data from URL: ${error.message}`);
-        } else {
-          alert(`Invalid JSON format: ${error.message}`);
+        
+        // If errorResponse is not already set, set a generic error message
+        if (!this.errorResponse) {
+          this.errorResponse = `Error: ${error.message}\n\nPlease check the console for more details.`;
         }
+        
+        alert(`Error fetching data from API: ${error.message}`);
       } finally {
         this.isLoading = false;
       }
@@ -221,20 +364,89 @@ export default {
     updateColumns(data) {
       if (data.length > 0) {
         const sampleRow = data[0]
-        const newColumns = Object.keys(sampleRow).map(key => ({
-          label: key.charAt(0).toUpperCase() + key.slice(1),
-          field: key,
-          type: typeof sampleRow[key] === 'number' ? 'number' : 'string'
-        }))
+        const newColumns = Object.keys(sampleRow).map(key => {
+          const column = {
+            label: key.charAt(0).toUpperCase() + key.slice(1),
+            field: key,
+            type: typeof sampleRow[key] === 'number' ? 'number' : 'string'
+          }
+          
+          // Set default widths based on data type and content
+          if (typeof sampleRow[key] === 'number') {
+            column.width = '100px'
+          } else if (key.toLowerCase().includes('id')) {
+            column.width = '80px'
+          } else if (key.toLowerCase().includes('email')) {
+            column.width = '200px'
+          } else if (key.toLowerCase().includes('status')) {
+            column.width = '120px'
+          } else {
+            column.width = '150px'
+          }
+          
+          return column
+        })
         
         this.columns = newColumns
       }
     },
-    
+
+    async refreshAzureConfig() {
+      console.log('Refreshing Azure configuration...');
+      await this.loadAzureConfig();
+      console.log('Current subscriptions count:', this.subscriptions.length);
+      console.log('Current subscriptionId:', this.subscriptionId);
+    },
+
+    getResponseTitle() {
+      if (!this.errorResponse) return 'Response';
+      
+      // Check if it's an error response (starts with HTTP status or contains "Error")
+      if (this.errorResponse.startsWith('HTTP ') || 
+          this.errorResponse.startsWith('JSON Parse Error') || 
+          this.errorResponse.startsWith('Error:')) {
+        return 'Error Response';
+      }
+      
+      // Otherwise, it's just a response display (like non-array response)
+      return 'Response';
+    },
+
+    multiWordSearch(row, col, cellValue, searchTerm) {
+      // If no search term, show all rows
+      if (!searchTerm || searchTerm.trim() === '') {
+        return true;
+      }
+      
+      // Split search term by spaces and filter out empty strings
+      const searchWords = searchTerm.toLowerCase().trim().split(/\s+/).filter(word => word.length > 0);
+      
+      // If no valid search words, show all rows
+      if (searchWords.length === 0) {
+        return true;
+      }
+      
+      // Get all searchable text from the row
+      let searchableText = '';
+      
+      // Collect text from all columns
+      this.columns.forEach(column => {
+        const value = row[column.field];
+        if (value !== null && value !== undefined) {
+          searchableText += String(value).toLowerCase() + ' ';
+        }
+      });
+      
+      // Check if all search words are found in the searchable text
+      return searchWords.every(word => searchableText.includes(word));
+    },
+
     clearData() {
       this.rows = []
-      this.jsonInput = ''
-      this.bearerToken = ''
+      this.selectedApiPath = ''
+      this.errorResponse = ''
+      // Don't clear subscriptionId - keep it selected
+      // Don't clear the Azure config - keep it loaded
     }
   }
 }
@@ -257,7 +469,7 @@ body {
 }
 
 #app {
-  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   padding: 20px;
 }
@@ -293,6 +505,7 @@ body {
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow-x: auto;
 }
 
 .table-container h2 {
@@ -331,8 +544,103 @@ body {
 }
 
 /* Authentication Section */
+.config-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.config-row .auth-section {
+  flex: 1;
+  margin-bottom: 0;
+}
+
 .auth-section {
   margin-bottom: 15px;
+}
+
+.token-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.endpoint-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.endpoint-text {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  color: #666;
+  background-color: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+}
+
+.status-indicator {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.status-warning {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+
+.data-input-section {
+  margin-bottom: 15px;
+}
+
+/* Error Display Section */
+.error-section {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+}
+
+.error-title {
+  margin: 0 0 10px 0;
+  color: #dc3545;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.error-console {
+  width: 100%;
+  padding: 12px;
+  background-color: #000;
+  color: #00ff00;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  resize: vertical;
+  min-height: 200px;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.error-console:focus {
+  outline: none;
+  border-color: #666;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
 }
 
 .token-label {
@@ -415,6 +723,8 @@ body {
 .vgt-table {
   border-collapse: collapse;
   width: 100%;
+  table-layout: auto;
+  min-width: 100%;
 }
 
 .vgt-table.striped tbody tr:nth-child(odd) {
@@ -428,6 +738,19 @@ body {
 .vgt-table.bordered th,
 .vgt-table.bordered td {
   border: 1px solid #dee2e6;
+  padding: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.vgt-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 /* Responsive Design */

@@ -1,6 +1,6 @@
 # Json Browser
 
-A Vue.js application that uses vue-good-table to display and manipulate JSON data in a beautiful, feature-rich table format.
+A Vue.js application that uses vue-good-table to display and manipulate JSON data in a beautiful, feature-rich table format. Designed specifically for browsing Azure API responses.
 
 ## Features
 
@@ -8,7 +8,8 @@ A Vue.js application that uses vue-good-table to display and manipulate JSON dat
 - 🔍 **Search & Filter** - Built-in search functionality
 - 📄 **Pagination** - Handle large datasets efficiently
 - 🔄 **Sorting** - Multi-column sorting support
-- ✏️ **CRUD Operations** - Edit and delete table rows
+- 🔐 **Secure Azure Integration** - Environment variable-based token management
+- 🌐 **Azure API Support** - Pre-configured endpoints for common Azure resources
 - 📝 **JSON Input** - Load custom JSON data dynamically
 - 📱 **Responsive Design** - Works on all screen sizes
 
@@ -18,6 +19,7 @@ A Vue.js application that uses vue-good-table to display and manipulate JSON dat
 
 - Node.js (version 14 or higher)
 - npm or yarn
+- Azure CLI (for Azure integration)
 
 ### Installation
 
@@ -26,16 +28,27 @@ A Vue.js application that uses vue-good-table to display and manipulate JSON dat
    npm install
    ```
 
-2. Start the development server:
+2. **For Azure Integration (Recommended):**
+   ```bash
+   # Login to Azure CLI
+   az login
+   
+   # Start with Azure token loaded automatically
+   npm run dev:azure
+   ```
+
+3. **For Development without Azure:**
    ```bash
    npm run dev
    ```
 
-3. Open your browser and navigate to `http://localhost:3000`
+4. Open your browser and navigate to `http://localhost:5173`
 
 ### Available Scripts
 
-- `npm run dev` - Start development server
+- `npm run dev` - Start development server (no Azure token)
+- `npm run dev:azure` - Start with Azure authentication (recommended)
+- `npm run load-azure` - Generate Azure configuration file
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build
 
