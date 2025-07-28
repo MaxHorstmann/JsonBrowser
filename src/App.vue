@@ -56,11 +56,10 @@
           >
             <option value="/subscriptions/{subscription-id}/resourceGroups">/subscriptions/{subscription-id}/resourceGroups - List Resource Groups</option>
             <option value="/subscriptions/{subscription-id}/resources">/subscriptions/{subscription-id}/resources - List All Resources</option>
-            <option value="/subscriptions/{subscription-id}/providers/Microsoft.Web/sites">/subscriptions/{subscription-id}/providers/Microsoft.Web/sites - List Web Apps</option>
             <option value="/subscriptions/{subscription-id}/providers/Microsoft.Storage/storageAccounts">/subscriptions/{subscription-id}/providers/Microsoft.Storage/storageAccounts - List Storage Accounts</option>
-            <option value="/subscriptions/{subscription-id}/providers/Microsoft.Compute/virtualMachines">/subscriptions/{subscription-id}/providers/Microsoft.Compute/virtualMachines - List Virtual Machines</option>
             <option value="/subscriptions/{subscription-id}/providers/Microsoft.KeyVault/vaults">/subscriptions/{subscription-id}/providers/Microsoft.KeyVault/vaults - List Key Vaults</option>
-            <option value="/subscriptions/{subscription-id}/providers/Microsoft.Sql/servers">/subscriptions/{subscription-id}/providers/Microsoft.Sql/servers - List SQL Servers</option>
+            <option value="/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/devcenters">/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/devcenters - List Dev Centers</option>
+            <option value="/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/projects">/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/projects - List Projects</option>
           </select>
         </div>
         
@@ -76,7 +75,7 @@
         </div>
       </div>
 
-      <div v-if="rows.length > 0" class="table-container">
+      <div v-if="rows.length > 0 && !errorResponse" class="table-container">
         
         <!-- Vue Good Table Component -->
         <vue-good-table
@@ -264,7 +263,13 @@ export default {
           }
           
           // Add api-version query parameter (required for all Azure API requests)
-          const apiVersion = '2021-04-01'; // Standard API version for most resource management operations
+          let apiVersion = '2021-04-01'; // Standard API version for most resource management operations
+          
+          // Use newer API version for Dev Center resources
+          if (fetchUrl.includes('/providers/Microsoft.DevCenter/')) {
+            apiVersion = '2024-02-01'; // Use a stable API version for Dev Center
+          }
+          
           const separator = fetchUrl.includes('?') ? '&' : '?';
           fetchUrl += `${separator}api-version=${apiVersion}`;
           
@@ -299,6 +304,7 @@ export default {
             errorDisplay += `Response Body:\n${responseText}`;
             
             this.errorResponse = errorDisplay;
+            // Don't show popup for HTTP errors - just display in console
             throw new Error(`HTTP error! status: ${response.status}`);
           }
           
@@ -355,7 +361,10 @@ export default {
           this.errorResponse = `Error: ${error.message}\n\nPlease check the console for more details.`;
         }
         
-        alert(`Error fetching data from API: ${error.message}`);
+        // Only show popup for non-HTTP errors (network issues, etc.)
+        if (!error.message.includes('HTTP error!')) {
+          alert(`Error fetching data from API: ${error.message}`);
+        }
       } finally {
         this.isLoading = false;
       }
