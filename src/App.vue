@@ -55,7 +55,7 @@
             :disabled="isLoading"
           >
             <option value="/subscriptions/{subscription-id}/resourceGroups">/subscriptions/{subscription-id}/resourceGroups - List Resource Groups</option>
-            <option value="/subscriptions/{subscription-id}/resources">/subscriptions/{subscription-id}/resources - List All Resources</option>
+              <option value="/subscriptions/{subscription-id}/resources">/subscriptions/{subscription-id}/resources - List All Resources</option>
             <option value="/subscriptions/{subscription-id}/providers/Microsoft.Storage/storageAccounts">/subscriptions/{subscription-id}/providers/Microsoft.Storage/storageAccounts - List Storage Accounts</option>
             <option value="/subscriptions/{subscription-id}/providers/Microsoft.KeyVault/vaults">/subscriptions/{subscription-id}/providers/Microsoft.KeyVault/vaults - List Key Vaults</option>
             <option value="/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/devcenters">/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/devcenters - List Dev Centers</option>
@@ -84,7 +84,7 @@
           :pagination-options="{
             enabled: true,
             mode: 'records',
-            perPage: 10,
+            perPage: 'all',
             perPageDropdown: [10, 20, 50, 100],
             dropdownAllowAll: true,
           }"
@@ -99,7 +99,32 @@
           }"
           styleClass="vgt-table striped bordered"
         >
+          <template #table-row="props">
+            <span 
+              v-if="isJsonValue(props.formattedRow[props.column.field])"
+              class="json-cell"
+              @mouseenter="showJsonPopup($event, props.formattedRow[props.column.field])"
+              @mouseleave="hideJsonPopup"
+            >
+              {{ getJsonPreview(props.formattedRow[props.column.field]) }}
+            </span>
+            <span 
+              v-else
+              class="regular-cell"
+            >
+              {{ props.formattedRow[props.column.field] }}
+            </span>
+          </template>
         </vue-good-table>
+        
+        <!-- JSON Popup -->
+        <div 
+          v-if="jsonPopup.show" 
+          class="json-popup"
+          :style="{ top: jsonPopup.top + 'px', left: jsonPopup.left + 'px' }"
+        >
+          <pre class="json-content">{{ jsonPopup.content }}</pre>
+        </div>
       </div>
     </main>
   </div>
@@ -118,7 +143,13 @@ export default {
       isLoading: false,
       errorResponse: '',
       columns: [],
-      rows: []
+      rows: [],
+      jsonPopup: {
+        show: false,
+        content: '',
+        top: 0,
+        left: 0
+      }
     }
   },
   async mounted() {
@@ -450,6 +481,175 @@ export default {
       return searchWords.every(word => searchableText.includes(word));
     },
 
+    isJsonValue(value) {
+      // Debug: log every value being checked
+      console.log('Checking value for JSON popup:', { value, type: typeof value });
+      
+      // Check if it's already an object or array
+      if (typeof value === 'object' && value !== null) {
+        console.log('✓ Found object/array value:', value);
+        return true;
+      }
+      
+      // Check if it's a string that contains JSON
+      if (typeof value === 'string') {
+        // Look for JSON-like strings (starts with { or [)
+        const trimmed = value.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try {
+            const parsed = JSON.parse(value);
+            if (typeof parsed === 'object' && parsed !== null) {
+              console.log('✓ Found JSON string value:', parsed);
+              return true;
+            }
+          } catch {
+            // If it looks like JSON but doesn't parse, still treat as JSON for display
+            console.log('✓ Found JSON-like string that failed to parse:', value);
+            return true;
+          }
+        }
+        
+        // Also show popup for long strings or URLs for better readability
+        if (trimmed.length > 50 || 
+            trimmed.includes('http://') || 
+            trimmed.includes('https://') ||
+            trimmed.includes('/subscriptions/') ||
+            trimmed.includes('/resourceGroups/')) {
+          console.log('✓ Found long string or URL value:', value);
+          return true;
+        }
+        
+        // TEMPORARY: For testing, make ALL strings with certain patterns show popups
+        if (trimmed.includes('id') || trimmed.includes('name') || trimmed.length > 20) {
+          console.log('✓ Found test string value:', value);
+          return true;
+        }
+      }
+      
+      console.log('✗ Not a JSON value:', value);
+      return false;
+    },
+
+    getJsonPreview(value) {
+      if (typeof value === 'object' && value !== null) {
+        if (Array.isArray(value)) {
+          return `[Array ${value.length}]`;
+        } else {
+          // Show actual object content, truncated if too long
+          const jsonStr = JSON.stringify(value);
+          return jsonStr.length > 100 ? jsonStr.substring(0, 97) + '...' : jsonStr;
+        }
+      }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        // Check for JSON strings
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try {
+            const parsed = JSON.parse(value);
+            if (typeof parsed === 'object' && parsed !== null) {
+              if (Array.isArray(parsed)) {
+                return `[Array ${parsed.length}]`;
+              } else {
+                // Show actual parsed object content
+                const jsonStr = JSON.stringify(parsed);
+                return jsonStr.length > 100 ? jsonStr.substring(0, 97) + '...' : jsonStr;
+              }
+            }
+          } catch {
+            // If it looks like JSON but doesn't parse, show as JSON-like
+            return trimmed.length > 100 ? trimmed.substring(0, 97) + '...' : trimmed;
+          }
+        }
+        
+        // For long strings or URLs, show truncated preview
+        if (trimmed.length > 50) {
+          return trimmed.substring(0, 47) + '...';
+        } else if (trimmed.includes('http://') || trimmed.includes('https://')) {
+          return '🔗 ' + (trimmed.length > 40 ? trimmed.substring(0, 37) + '...' : trimmed);
+        } else if (trimmed.includes('/subscriptions/') || trimmed.includes('/resourceGroups/')) {
+          return '📁 ' + (trimmed.length > 40 ? trimmed.substring(0, 37) + '...' : trimmed);
+        }
+      }
+      return String(value).length > 50 ? String(value).substring(0, 50) + '...' : String(value);
+    },
+
+    showJsonPopup(event, value) {
+      console.log('🎯 POPUP SHOW - showJsonPopup called with:', { 
+        event: event.type, 
+        target: event.target, 
+        value, 
+        clientX: event.clientX, 
+        clientY: event.clientY 
+      });
+      
+      let jsonContent;
+      
+      if (typeof value === 'object' && value !== null) {
+        jsonContent = JSON.stringify(value, null, 2);
+      } else if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try {
+            const parsed = JSON.parse(value);
+            if (typeof parsed === 'object' && parsed !== null) {
+              jsonContent = JSON.stringify(parsed, null, 2);
+            } else {
+              jsonContent = value;
+            }
+          } catch {
+            // Show the raw string if it can't be parsed
+            jsonContent = value;
+          }
+        } else {
+          // For long strings, URLs, or paths, just show the full content nicely formatted
+          jsonContent = value;
+        }
+      } else {
+        jsonContent = String(value);
+      }
+
+      // Use page coordinates for better positioning
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+      const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+      
+      let left = event.pageX + 15;
+      let top = event.pageY + 15;
+      
+      // Adjust if popup would go off-screen (using estimated popup size)
+      const popupWidth = 500;
+      const popupHeight = 400;
+      
+      if (left + popupWidth > viewportWidth + scrollX) {
+        left = event.pageX - popupWidth - 15;
+      }
+      if (top + popupHeight > viewportHeight + scrollY) {
+        top = event.pageY - popupHeight - 15;
+      }
+      
+      // Ensure popup doesn't go off the left or top edge
+      if (left < scrollX + 10) left = scrollX + 10;
+      if (top < scrollY + 10) top = scrollY + 10;
+
+      this.jsonPopup = {
+        show: true,
+        content: jsonContent,
+        top: top,
+        left: left
+      };
+      
+      console.log('🎯 POPUP SET - JSON popup configured:', this.jsonPopup);
+    },
+
+    hideJsonPopup() {
+      console.log('🎯 POPUP HIDE - hideJsonPopup called');
+      this.jsonPopup.show = false;
+    },
+
     clearData() {
       this.rows = []
       this.selectedApiPath = ''
@@ -747,11 +947,12 @@ body {
 .vgt-table.bordered th,
 .vgt-table.bordered td {
   border: 1px solid #dee2e6;
-  padding: 8px;
+  padding: 8px 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 200px;
+  transition: all 0.15s ease;
 }
 
 .vgt-table th {
@@ -760,6 +961,81 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
+  border-bottom: 2px solid #dee2e6;
+}
+
+/* Enhanced custom cell styles */
+.json-cell {
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 3px;
+  display: inline-block;
+  transition: background-color 0.15s ease;
+}
+
+.json-cell:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.regular-cell {
+  cursor: default;
+  padding: 4px 8px;
+  display: inline-block;
+  border-radius: 3px;
+  transition: background-color 0.15s ease;
+}
+
+.regular-cell:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* JSON Popup */
+.json-popup {
+  position: absolute;
+  background: #ffffff;
+  color: #333333;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+  padding: 16px;
+  max-width: 500px;
+  max-height: 400px;
+  overflow: auto;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  animation: fadeIn 0.2s ease-in;
+  backdrop-filter: blur(8px);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.json-content {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: #333333;
+  background-color: #f8f9fa;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+}
+
+/* Additional table row hover effects */
+.vgt-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.vgt-table tbody tr:hover {
+  background-color: #f8f9fa !important;
+}
+
+.vgt-table tbody tr:hover td {
+  border-color: #dee2e6;
 }
 
 /* Responsive Design */
