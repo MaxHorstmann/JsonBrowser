@@ -197,6 +197,60 @@
               <pre>{{ JSON.stringify(selectedResource, null, 2) }}</pre>
             </div>
           </div>
+
+          <!-- Child Resources Section -->
+          <div class="details-card">
+            <h3>Child Resources</h3>
+            <div v-if="isLoadingChildResources" class="loading-section">
+              <p>Loading child resources...</p>
+            </div>
+            <div v-else-if="childResourceError" class="error-section">
+              <p class="error-text">{{ childResourceError }}</p>
+            </div>
+            <div v-else-if="childResources.length > 0" class="child-resources-section">
+              <div class="child-resources-grid">
+                <div v-for="(childResource, index) in childResources" :key="index" class="child-resource-card">
+                  <div class="child-resource-header">
+                    <h4>{{ childResource.name || childResource.id || 'Unknown Resource' }}</h4>
+                    <span class="child-resource-type">{{ childResource.type || 'Unknown Type' }}</span>
+                  </div>
+                  <div class="child-resource-details">
+                    <div v-if="childResource.location" class="child-detail-item">
+                      <span class="child-label">Location:</span>
+                      <span class="child-value">{{ childResource.location }}</span>
+                    </div>
+                    <div v-if="childResource.properties?.osType" class="child-detail-item">
+                      <span class="child-label">OS Type:</span>
+                      <span class="child-value">{{ childResource.properties.osType }}</span>
+                    </div>
+                    <div v-if="childResource.properties?.devBoxDefinitionName" class="child-detail-item">
+                      <span class="child-label">Dev Box Definition:</span>
+                      <span class="child-value">{{ childResource.properties.devBoxDefinitionName }}</span>
+                    </div>
+                    <div v-if="childResource.properties?.networkConnectionName" class="child-detail-item">
+                      <span class="child-label">Network Connection:</span>
+                      <span class="child-value">{{ childResource.properties.networkConnectionName }}</span>
+                    </div>
+                    <div v-if="childResource.properties?.licenseType" class="child-detail-item">
+                      <span class="child-label">License Type:</span>
+                      <span class="child-value">{{ childResource.properties.licenseType }}</span>
+                    </div>
+                    <div v-if="childResource.properties?.localAdministrator" class="child-detail-item">
+                      <span class="child-label">Local Administrator:</span>
+                      <span class="child-value">{{ childResource.properties.localAdministrator }}</span>
+                    </div>
+                  </div>
+                  <div class="child-resource-json">
+                    <details>
+                      <summary>View Full JSON</summary>
+                      <pre class="child-json-content">{{ JSON.stringify(childResource, null, 2) }}</pre>
+                    </details>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="no-data">No child resources found</div>
+          </div>
         </div>
       </div>
     </main>
@@ -225,7 +279,11 @@ export default {
       },
       // View state management
       currentView: 'table', // 'table' or 'details'
-      selectedResource: null
+      selectedResource: null,
+      // Child resources for details view
+      childResources: [],
+      isLoadingChildResources: false,
+      childResourceError: null
     }
   },
   async mounted() {
@@ -737,12 +795,158 @@ export default {
       console.log('📋 VIEW DETAILS - Opening details for resource:', resource);
       this.selectedResource = resource;
       this.currentView = 'details';
+      this.childResources = [];
+      this.childResourceError = null;
+      
+      // Load child resources if available
+      this.loadChildResources(resource);
     },
 
     goBackToTable() {
       console.log('🔙 BACK TO TABLE - Returning to table view');
       this.currentView = 'table';
       this.selectedResource = null;
+      this.childResources = [];
+      this.childResourceError = null;
+    },
+
+    async loadChildResources(parentResource) {
+      console.log('🔄 LOADING CHILD RESOURCES for:', parentResource);
+      
+      if (!parentResource.id) {
+        console.log('No resource ID available for child resource lookup');
+        return;
+      }
+
+      this.isLoadingChildResources = true;
+      this.childResourceError = null;
+
+      try {
+        const childEndpoints = this.getChildResourceEndpoints(parentResource);
+        console.log('Child endpoints to fetch:', childEndpoints);
+        
+        if (childEndpoints.length === 0) {
+          console.log('No child resource endpoints found for this resource type');
+          this.childResources = [];
+          return;
+        }
+
+        let allChildResources = [];
+
+        // Load child resources from all endpoints
+        for (const endpoint of childEndpoints) {
+          try {
+            console.log(`Fetching child resources from: ${endpoint.url}`);
+            const childData = await this.fetchChildResourceData(endpoint);
+            if (childData && Array.isArray(childData) && childData.length > 0) {
+              // Add resource type information to each child
+              const typedChildData = childData.map(child => ({
+                ...child,
+                _childResourceType: endpoint.type,
+                _parentId: parentResource.id
+              }));
+              
+              allChildResources = [...allChildResources, ...typedChildData];
+              console.log(`Found ${typedChildData.length} ${endpoint.type} resources`);
+            }
+          } catch (error) {
+            console.error(`Error loading ${endpoint.type} for ${parentResource.name}:`, error);
+          }
+        }
+
+        this.childResources = allChildResources;
+        console.log(`Total child resources loaded: ${allChildResources.length}`);
+        
+      } catch (error) {
+        console.error('Error loading child resources:', error);
+        this.childResourceError = `Error loading child resources: ${error.message}`;
+      } finally {
+        this.isLoadingChildResources = false;
+      }
+    },
+
+    getChildResourceEndpoints(parentResource) {
+      const endpoints = [];
+      
+      console.log('Determining child endpoints for resource type:', parentResource.type);
+      
+      // Determine parent resource type and get appropriate child endpoints
+      if (parentResource.type === 'Microsoft.DevCenter/projects' || 
+          (parentResource.id && parentResource.id.includes('/projects/'))) {
+        // For DevCenter projects, load pools
+        console.log('DevCenter project detected, adding pools endpoint');
+        endpoints.push({
+          url: `${parentResource.id}/pools?api-version=2024-02-01`,
+          type: 'pools'
+        });
+      } else if (parentResource.type === 'Microsoft.Storage/storageAccounts' ||
+                 (parentResource.id && parentResource.id.includes('/storageAccounts/'))) {
+        // For Storage Accounts, load containers
+        console.log('Storage Account detected, adding containers endpoint');
+        endpoints.push({
+          url: `${parentResource.id}/blobServices/default/containers?api-version=2021-04-01`,
+          type: 'containers'
+        });
+      } else if (parentResource.type === 'Microsoft.Resources/resourceGroups' ||
+                 (parentResource.id && parentResource.id.includes('/resourceGroups/'))) {
+        // For Resource Groups, load all resources in the group
+        console.log('Resource Group detected, adding resources endpoint');
+        endpoints.push({
+          url: `${parentResource.id}/resources?api-version=2021-04-01`,
+          type: 'resources'
+        });
+      } else if (parentResource.type === 'Microsoft.Web/sites' ||
+                 (parentResource.id && parentResource.id.includes('/sites/'))) {
+        // For App Services, load deployment slots
+        console.log('App Service detected, adding slots endpoint');
+        endpoints.push({
+          url: `${parentResource.id}/slots?api-version=2021-02-01`,
+          type: 'slots'
+        });
+      } else if (parentResource.type === 'Microsoft.Compute/virtualMachines' ||
+                 (parentResource.id && parentResource.id.includes('/virtualMachines/'))) {
+        // For VMs, load extensions
+        console.log('Virtual Machine detected, adding extensions endpoint');
+        endpoints.push({
+          url: `${parentResource.id}/extensions?api-version=2021-07-01`,
+          type: 'extensions'
+        });
+      }
+      
+      console.log(`Found ${endpoints.length} child endpoints`);
+      return endpoints;
+    },
+
+    async fetchChildResourceData(endpoint) {
+      console.log('Fetching child resource data from:', endpoint.url);
+      
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (this.bearerToken.trim()) {
+        headers['Authorization'] = `Bearer ${this.bearerToken.trim()}`;
+      }
+      
+      const response = await fetch(`${this.azureEndpoint.replace(/\/$/, '')}${endpoint.url}`, {
+        method: 'GET',
+        headers: headers
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Handle wrapped response
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        if (data.hasOwnProperty('value') && Array.isArray(data.value)) {
+          return data.value;
+        }
+      }
+      
+      return Array.isArray(data) ? data : [];
     },
 
     formatResourceProperties(resource) {
@@ -769,6 +973,9 @@ export default {
       this.errorResponse = ''
       this.currentView = 'table'
       this.selectedResource = null
+      this.childResources = []
+      this.isLoadingChildResources = false
+      this.childResourceError = null
       // Don't clear subscriptionId - keep it selected
       // Don't clear the Azure config - keep it loaded
     }
@@ -1261,6 +1468,133 @@ body {
   font-style: italic;
   text-align: center;
   padding: 20px;
+}
+
+/* Child Resources Styles */
+.loading-section {
+  text-align: center;
+  padding: 20px;
+  color: #6c757d;
+}
+
+.error-text {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+.child-resources-section {
+  margin-top: 15px;
+}
+
+.child-resources-grid {
+  display: grid;
+  gap: 15px;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+}
+
+.child-resource-card {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 15px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: box-shadow 0.15s ease;
+}
+
+.child-resource-card:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.child-resource-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.child-resource-header h4 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 600;
+  word-break: break-all;
+  flex: 1;
+  margin-right: 10px;
+}
+
+.child-resource-type {
+  background: #007acc;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.child-resource-details {
+  margin-bottom: 15px;
+}
+
+.child-detail-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 6px 0;
+}
+
+.child-label {
+  font-weight: 600;
+  color: #495057;
+  font-size: 13px;
+  margin-right: 10px;
+  min-width: 120px;
+}
+
+.child-value {
+  color: #2c3e50;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  text-align: right;
+  word-break: break-all;
+  flex: 1;
+}
+
+.child-resource-json {
+  margin-top: 10px;
+}
+
+.child-resource-json details {
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.child-resource-json summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #007acc;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.child-resource-json summary:hover {
+  color: #005a9e;
+}
+
+.child-json-content {
+  margin: 8px 0 0 0;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #2c3e50;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 /* JSON Popup */
