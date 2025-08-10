@@ -5,123 +5,198 @@
     </header>
 
     <main class="main-content">
-      <!-- JSON Input Section -->
-      <div class="json-input-section">
-        <h3>Azure API Configuration</h3>
-        <div class="config-row">
-          <div class="auth-section">
-            <label for="subscriptionId" class="token-label">Subscription:</label>
-            <select
-              id="subscriptionId"
-              v-model="subscriptionId"
-              class="token-input"
-              autocomplete="off"
-              data-lpignore="true"
-              data-form-type="other"
-            >
-              <option value="">Select a subscription...</option>
-              <option 
-                v-for="subscription in subscriptions" 
-                :key="subscription.id" 
-                :value="subscription.id"
+      <!-- Table View -->
+      <div v-if="currentView === 'table'">
+        <!-- JSON Input Section -->
+        <div class="json-input-section">
+          <h3>Azure API Configuration</h3>
+          <div class="config-row">
+            <div class="auth-section">
+              <label for="subscriptionId" class="token-label">Subscription:</label>
+              <select
+                id="subscriptionId"
+                v-model="subscriptionId"
+                class="token-input"
+                autocomplete="off"
+                data-lpignore="true"
+                data-form-type="other"
               >
-                {{ subscription.name }} ({{ subscription.id }})
-              </option>
+                <option value="">Select a subscription...</option>
+                <option 
+                  v-for="subscription in subscriptions" 
+                  :key="subscription.id" 
+                  :value="subscription.id"
+                >
+                  {{ subscription.name }} ({{ subscription.id }})
+                </option>
+              </select>
+            </div>
+            <div class="auth-section">
+              <div class="endpoint-info">
+                <span class="token-label">Resource Manager Endpoint:</span>
+                <span class="endpoint-text">{{ azureEndpoint }}</span>
+              </div>
+              <div class="token-status">
+                <span class="token-label">Authentication Status:</span>
+                <span v-if="bearerToken" class="status-indicator status-success">
+                  ✓ Bearer token loaded securely
+                </span>
+                <span v-else class="status-indicator status-warning">
+                  ⚠ No bearer token - requests will be unauthenticated
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="data-input-section">
+            <label for="apiPathSelect" class="token-label">Azure API Endpoints:</label>
+            <select
+              id="apiPathSelect"
+              v-model="selectedApiPath"
+              @change="onApiPathSelect"
+              class="token-input"
+              :disabled="isLoading"
+            >
+              <option value="/subscriptions/{subscription-id}/resourceGroups">/subscriptions/{subscription-id}/resourceGroups - List Resource Groups</option>
+                <option value="/subscriptions/{subscription-id}/resources">/subscriptions/{subscription-id}/resources - List All Resources</option>
+              <option value="/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/devcenters">/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/devcenters - List Dev Centers</option>
+              <option value="/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/projects">/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/projects - List Projects</option>
             </select>
           </div>
-          <div class="auth-section">
-            <div class="endpoint-info">
-              <span class="token-label">Resource Manager Endpoint:</span>
-              <span class="endpoint-text">{{ azureEndpoint }}</span>
-            </div>
-            <div class="token-status">
-              <span class="token-label">Authentication Status:</span>
-              <span v-if="bearerToken" class="status-indicator status-success">
-                ✓ Bearer token loaded securely
-              </span>
-              <span v-else class="status-indicator status-warning">
-                ⚠ No bearer token - requests will be unauthenticated
-              </span>
-            </div>
+          
+          <!-- Error Display Section -->
+          <div v-if="errorResponse" class="error-section">
+            <h4 class="error-title">{{ getResponseTitle() }}</h4>
+            <textarea 
+              v-model="errorResponse" 
+              class="error-console" 
+              readonly
+              rows="10"
+            ></textarea>
           </div>
         </div>
-        <div class="data-input-section">
-          <label for="apiPathSelect" class="token-label">Azure API Endpoints:</label>
-          <select
-            id="apiPathSelect"
-            v-model="selectedApiPath"
-            @change="onApiPathSelect"
-            class="token-input"
-            :disabled="isLoading"
-          >
-            <option value="/subscriptions/{subscription-id}/resourceGroups">/subscriptions/{subscription-id}/resourceGroups - List Resource Groups</option>
-              <option value="/subscriptions/{subscription-id}/resources">/subscriptions/{subscription-id}/resources - List All Resources</option>
-            <option value="/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/devcenters">/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/devcenters - List Dev Centers</option>
-            <option value="/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/projects">/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/projects - List Projects</option>
-          </select>
-        </div>
-        
-        <!-- Error Display Section -->
-        <div v-if="errorResponse" class="error-section">
-          <h4 class="error-title">{{ getResponseTitle() }}</h4>
-          <textarea 
-            v-model="errorResponse" 
-            class="error-console" 
-            readonly
-            rows="10"
-          ></textarea>
-        </div>
-      </div>
 
-      <div v-if="rows.length > 0 && !errorResponse" class="table-container">
         
-        <!-- Vue Good Table Component -->
-        <vue-good-table
-          :columns="columns"
-          :rows="rows"
-          :pagination-options="{
-            enabled: true,
-            mode: 'records',
-            perPage: -1,
-            perPageDropdown: [10, 20, 50, 100],
-            dropdownAllowAll: true,
-          }"
-          :search-options="{
-            enabled: true,
-            trigger: 'keyup',
-            searchFn: multiWordSearch
-          }"
-          :sort-options="{
-            enabled: true,
-            multipleColumns: true
-          }"
-          styleClass="vgt-table striped bordered"
-        >
-          <template #table-row="props">
-            <span 
-              v-if="isJsonValue(props.formattedRow[props.column.field])"
-              class="json-cell"
-              @mouseenter="showJsonPopup($event, props.formattedRow[props.column.field])"
-              @mouseleave="hideJsonPopup"
-            >
-              {{ getJsonPreview(props.formattedRow[props.column.field]) }}
-            </span>
-            <span 
-              v-else
-              class="regular-cell"
-            >
-              {{ props.formattedRow[props.column.field] }}
-            </span>
-          </template>
-        </vue-good-table>
+        <!-- Table Section -->
+        <div v-if="rows.length > 0 && !errorResponse" class="table-container">
+          <!-- Vue Good Table Component -->
+          <vue-good-table
+            :columns="columns"
+            :rows="rows"
+            :pagination-options="{
+              enabled: true,
+              mode: 'records',
+              perPage: -1,
+              perPageDropdown: [10, 20, 50, 100],
+              dropdownAllowAll: true,
+            }"
+            :search-options="{
+              enabled: true,
+              trigger: 'keyup',
+              searchFn: multiWordSearch
+            }"
+            :sort-options="{
+              enabled: true,
+              multipleColumns: true
+            }"
+            styleClass="vgt-table striped bordered"
+          >
+            <template #table-row="props">
+              <!-- Special handling for ID column - make it a clickable link -->
+              <span v-if="props.column.field === 'id'">
+                <a 
+                  href="#" 
+                  @click.prevent="viewResourceDetails(props.row)"
+                  class="resource-link"
+                >
+                  {{ getJsonPreview(props.formattedRow[props.column.field]) }}
+                </a>
+              </span>
+              <!-- Regular JSON cells with hover popup -->
+              <span 
+                v-else-if="isJsonValue(props.formattedRow[props.column.field])"
+                class="json-cell"
+                @mouseenter="showJsonPopup($event, props.formattedRow[props.column.field])"
+                @mouseleave="hideJsonPopup"
+              >
+                {{ getJsonPreview(props.formattedRow[props.column.field]) }}
+              </span>
+              <!-- Regular text cells -->
+              <span 
+                v-else
+                class="regular-cell"
+              >
+                {{ props.formattedRow[props.column.field] }}
+              </span>
+            </template>
+          </vue-good-table>
+          
+          <!-- JSON Popup -->
+          <div 
+            v-if="jsonPopup.show" 
+            class="json-popup"
+            :style="{ top: jsonPopup.top + 'px', left: jsonPopup.left + 'px' }"
+          >
+            <pre class="json-content">{{ jsonPopup.content }}</pre>
+          </div>
+        </div>
+      </div>      <!-- Details View -->
+      <div v-else-if="currentView === 'details'" class="details-view">
+        <div class="details-header">
+          <button @click="goBackToTable" class="back-button">← Back to Table</button>
+          <h2>Resource Details</h2>
+        </div>
         
-        <!-- JSON Popup -->
-        <div 
-          v-if="jsonPopup.show" 
-          class="json-popup"
-          :style="{ top: jsonPopup.top + 'px', left: jsonPopup.left + 'px' }"
-        >
-          <pre class="json-content">{{ jsonPopup.content }}</pre>
+        <div class="details-content">
+          <div class="details-card">
+            <h3>Basic Information</h3>
+            <div class="details-grid">
+              <div class="detail-item">
+                <label>ID:</label>
+                <span class="detail-value">{{ selectedResource?.id || 'N/A' }}</span>
+              </div>
+              <div class="detail-item">
+                <label>Name:</label>
+                <span class="detail-value">{{ selectedResource?.name || 'N/A' }}</span>
+              </div>
+              <div class="detail-item">
+                <label>Type:</label>
+                <span class="detail-value">{{ selectedResource?.type || 'N/A' }}</span>
+              </div>
+              <div class="detail-item">
+                <label>Location:</label>
+                <span class="detail-value">{{ selectedResource?.location || 'N/A' }}</span>
+              </div>
+              <div class="detail-item" v-if="selectedResource?.resourceGroup">
+                <label>Resource Group:</label>
+                <span class="detail-value">{{ selectedResource.resourceGroup }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="details-card">
+            <h3>Properties</h3>
+            <div class="json-viewer">
+              <pre>{{ formatResourceProperties(selectedResource) }}</pre>
+            </div>
+          </div>
+
+          <div class="details-card">
+            <h3>Tags</h3>
+            <div v-if="selectedResource?.tags && Object.keys(selectedResource.tags).length > 0" class="tags-grid">
+              <div v-for="(value, key) in selectedResource.tags" :key="key" class="tag-item">
+                <span class="tag-key">{{ key }}:</span>
+                <span class="tag-value">{{ value }}</span>
+              </div>
+            </div>
+            <div v-else class="no-data">No tags available</div>
+          </div>
+
+          <div class="details-card">
+            <h3>Raw JSON</h3>
+            <div class="json-viewer">
+              <pre>{{ JSON.stringify(selectedResource, null, 2) }}</pre>
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -147,7 +222,10 @@ export default {
         content: '',
         top: 0,
         left: 0
-      }
+      },
+      // View state management
+      currentView: 'table', // 'table' or 'details'
+      selectedResource: null
     }
   },
   async mounted() {
@@ -655,10 +733,42 @@ export default {
       this.jsonPopup.show = false;
     },
 
+    viewResourceDetails(resource) {
+      console.log('📋 VIEW DETAILS - Opening details for resource:', resource);
+      this.selectedResource = resource;
+      this.currentView = 'details';
+    },
+
+    goBackToTable() {
+      console.log('🔙 BACK TO TABLE - Returning to table view');
+      this.currentView = 'table';
+      this.selectedResource = null;
+    },
+
+    formatResourceProperties(resource) {
+      if (!resource) return 'No resource selected';
+      
+      // Extract meaningful properties excluding the basics already shown
+      const excludeKeys = ['id', 'name', 'type', 'location', 'resourceGroup', 'tags'];
+      const properties = {};
+      
+      Object.keys(resource).forEach(key => {
+        if (!excludeKeys.includes(key)) {
+          properties[key] = resource[key];
+        }
+      });
+      
+      return Object.keys(properties).length > 0 
+        ? JSON.stringify(properties, null, 2)
+        : 'No additional properties available';
+    },
+
     clearData() {
       this.rows = []
       this.selectedApiPath = ''
       this.errorResponse = ''
+      this.currentView = 'table'
+      this.selectedResource = null
       // Don't clear subscriptionId - keep it selected
       // Don't clear the Azure config - keep it loaded
     }
@@ -992,6 +1102,165 @@ body {
 
 .regular-cell:hover {
   background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* Resource link styles */
+.resource-link {
+  color: #007acc;
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 3px;
+  display: inline-block;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+
+.resource-link:hover {
+  background-color: rgba(0, 122, 204, 0.1);
+  text-decoration: underline;
+  color: #005a9e;
+}
+
+/* Details View Styles */
+.details-view {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.details-header {
+  background: #f8f9fa;
+  padding: 20px;
+  border-bottom: 1px solid #dee2e6;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.back-button {
+  background: #007acc;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.15s ease;
+}
+
+.back-button:hover {
+  background: #005a9e;
+}
+
+.details-header h2 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 24px;
+}
+
+.details-content {
+  padding: 20px;
+  display: grid;
+  gap: 20px;
+}
+
+.details-card {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 20px;
+}
+
+.details-card h3 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 18px;
+  border-bottom: 2px solid #007acc;
+  padding-bottom: 8px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-item label {
+  font-weight: 600;
+  color: #495057;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-value {
+  color: #2c3e50;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  background: white;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+  word-break: break-all;
+}
+
+.tags-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.tag-item {
+  background: white;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+  display: flex;
+  gap: 8px;
+}
+
+.tag-key {
+  font-weight: 600;
+  color: #495057;
+  font-size: 13px;
+}
+
+.tag-value {
+  color: #2c3e50;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.json-viewer {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 15px;
+  overflow-x: auto;
+  max-height: 400px;
+}
+
+.json-viewer pre {
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #2c3e50;
+}
+
+.no-data {
+  color: #6c757d;
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
 }
 
 /* JSON Popup */
