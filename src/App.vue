@@ -56,8 +56,6 @@
           >
             <option value="/subscriptions/{subscription-id}/resourceGroups">/subscriptions/{subscription-id}/resourceGroups - List Resource Groups</option>
               <option value="/subscriptions/{subscription-id}/resources">/subscriptions/{subscription-id}/resources - List All Resources</option>
-            <option value="/subscriptions/{subscription-id}/providers/Microsoft.Storage/storageAccounts">/subscriptions/{subscription-id}/providers/Microsoft.Storage/storageAccounts - List Storage Accounts</option>
-            <option value="/subscriptions/{subscription-id}/providers/Microsoft.KeyVault/vaults">/subscriptions/{subscription-id}/providers/Microsoft.KeyVault/vaults - List Key Vaults</option>
             <option value="/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/devcenters">/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/devcenters - List Dev Centers</option>
             <option value="/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/projects">/subscriptions/{subscription-id}/providers/Microsoft.DevCenter/projects - List Projects</option>
           </select>
@@ -84,7 +82,7 @@
           :pagination-options="{
             enabled: true,
             mode: 'records',
-            perPage: 'all',
+            perPage: -1,
             perPageDropdown: [10, 20, 50, 100],
             dropdownAllowAll: true,
           }"
@@ -404,6 +402,8 @@ export default {
     updateColumns(data) {
       if (data.length > 0) {
         const sampleRow = data[0]
+        
+        // Add data columns
         const newColumns = Object.keys(sampleRow).map(key => {
           const column = {
             label: key.charAt(0).toUpperCase() + key.slice(1),
@@ -611,27 +611,32 @@ export default {
         jsonContent = String(value);
       }
 
-      // Use page coordinates for better positioning
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+      // Get the element's position relative to the document
+      const rect = event.target.getBoundingClientRect();
       const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
       const scrollY = window.pageYOffset || document.documentElement.scrollTop;
       
-      let left = event.pageX + 15;
-      let top = event.pageY + 15;
+      // Calculate position relative to the document
+      let left = rect.right + scrollX + 10;
+      let top = rect.top + scrollY;
       
-      // Adjust if popup would go off-screen (using estimated popup size)
+      // Popup dimensions (estimated)
       const popupWidth = 500;
       const popupHeight = 400;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
       
+      // Adjust horizontally if popup would go off-screen
       if (left + popupWidth > viewportWidth + scrollX) {
-        left = event.pageX - popupWidth - 15;
-      }
-      if (top + popupHeight > viewportHeight + scrollY) {
-        top = event.pageY - popupHeight - 15;
+        left = rect.left + scrollX - popupWidth - 10;
       }
       
-      // Ensure popup doesn't go off the left or top edge
+      // Adjust vertically if popup would go off-screen
+      if (top + popupHeight > viewportHeight + scrollY) {
+        top = rect.bottom + scrollY - popupHeight;
+      }
+      
+      // Ensure popup doesn't go off the edges
       if (left < scrollX + 10) left = scrollX + 10;
       if (top < scrollY + 10) top = scrollY + 10;
 
